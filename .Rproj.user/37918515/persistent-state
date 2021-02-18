@@ -1,0 +1,8 @@
+build-last-errors="[]"
+build-last-errors-base-dir=""
+build-last-outputs="[]"
+compile_pdf_state="{\"tab_visible\":false,\"running\":false,\"target_file\":\"\",\"output\":\"\",\"errors\":[]}"
+files.monitored-path=""
+find-in-files-state="{\"handle\":\"f0092af6682d4dd796569a6061f67128\",\"input\":\"fig.height\",\"path\":\"~/Documents/Weill_Cornell/Functional_Interpretation/metabolomics/homework_1\",\"regex\":false,\"ignoreCase\":true,\"results\":{\"file\":[\"~/Documents/Weill_Cornell/Functional_Interpretation/metabolomics/homework_1/R/homework_1.rmd\",\"~/Documents/Weill_Cornell/Functional_Interpretation/metabolomics/homework_1/R/homework_1.rmd\",\"~/Documents/Weill_Cornell/Functional_Interpretation/metabolomics/homework_1/R/homework_1.rmd\"],\"line\":[17,66,128],\"lineValue\":[\"fig.height = 3)\",\"```{r, fig.width=8, fig.height=5}\",\"```{r, fig.height=6}\"],\"matchOn\":[[0],[20],[7]],\"matchOff\":[[10],[30],[17]],\"replaceMatchOn\":[[],[],[]],\"replaceMatchOff\":[[],[],[]]},\"running\":false,\"replace\":false,\"preview\":false,\"gitFlag\":false,\"replacePattern\":\"\"}"
+imageDirtyState="1"
+saveActionState="0"

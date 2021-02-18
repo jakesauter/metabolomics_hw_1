@@ -1,0 +1,355 @@
+---
+title: "Introduction to Metabolomics"
+author: "Jake Sauter"
+date: "2/19/2021"
+output: 
+  html_document: 
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning=FALSE, 
+                      error=FALSE)
+```
+
+## **Data Preprocessing**
+
+## **Loading Data**
+
+```{r}
+library(magrittr)
+data_dir <- "/home/x1/Documents/Weill_Cornell/Functional_Interpretation/metabolomics/homework_1/data/"
+data_filename <- list.files(data_dir, "Simulated_metabolomics_data.RData", 
+                            full.names = TRUE)
+data_filename %<>% normalizePath(mustWork=TRUE)
+data_env <- new.env()
+load(data_filename, envir = data_env)
+ls(data_env)
+```
+
+We see that there are three objects loaded into the `data_env` 
+environment from this data file. Let us first check the type 
+and dimensionality of each of these new variables. Below we find that gender is represented by a coding of 1 (male) and 2 (female), annotations include the name of the metabolites and their corresponding super pathways, sub pathways, and their formal names (title), and the matrix dat contains the metabolic numerical data. 
+
+```{r}
+str(data_env$gender)
+```
+
+```{r}
+str(data_env$annotations)
+```
+
+
+```{r}
+str(data_env$dat)
+```
+
+### **Checking Data Quality**
+
+**Check the data quality, e.g. by plotting each sample (rows) using boxplots. What do you observe? What possible reasons could there be? Tip: Omics data should always be logged before visualization.**
+
+We will first check overall metabolite measurement levels between the samples
+to ensure that there are no **batch effects** or experimental abnormalities. Batch effects occur in experiments when non-biological factors change the data produced by the experiment, leading to inaccurate conclusions. An example could be the results of an experiment in which more starting material is being used for certain samples on accident than the others.
+We note that it is commonly accepted to **log** biological data before 
+interpretation as this usually results in **normally distributed** data. Therefore, we take the logarithm with base e of the data. Below we plot boxplots of the data for every sample in blocks of 100 samples in order to show any differences more clearly. We can clearly see a pronounced upregulation in the first 100 samples.
+
+```{r, echo=FALSE}
+library(tidyverse)
+library(patchwork)
+```
+
+```{r, fig.width=8, fig.height=5}
+df <- 
+  data_env %>%
+  .$dat %>% 
+  log() %>% 
+  as.data.frame() %>% 
+  mutate(sample_num = row_number()) %>% 
+  pivot_longer(-c(sample_num), 
+               names_to='metabolite', values_to="concentration")
+
+plot_list <- vector('list', 9)
+for (group_num in 1:9) {
+  first_sample <- 1 + (100 * (group_num - 1))
+  last_sample <- 100 * (group_num - 1) + 100
+
+  plot_list[[group_num]] <- df %>% 
+    filter(sample_num >= first_sample, 
+           sample_num <= last_sample) %>% 
+    ggplot() + 
+      geom_boxplot(aes(x=sample_num, 
+                       y=concentration, 
+                       group=sample_num)) + 
+      ylim(c(-4, 6))
+}
+
+(plot_list[[1]] + plot_list[[2]] + plot_list[[3]]) / 
+(plot_list[[4]] + plot_list[[5]] + plot_list[[6]]) / 
+(plot_list[[7]] + plot_list[[8]] + plot_list[[9]])
+```
+
+Let's more closely visualize those samples that appear to have higher measurement
+levels all-around on all of the studied metabolites. We see that the samples from about 50 to 70 all have much higher concentrations than the remaining samples.
+
+```{r}
+plot_list[[1]]
+```
+
+This result is indicative of a possible batch effect and we need to process these samples such that their distribution of values becomes similar to that of all other samples. This can be solved by quotient normalization as part of the preprocessing steps.
+
+### **Quotient Normalization**
+
+Quotient Normalization is a procedure by which "assumes that changes in the concentrations  of  single  analytes  only  influence  parts  of  the spectra, whereas changes of the overall concentration of a sample influence the complete spectrum. In contrast to integral normalization,  which  supposes  that  the  total  integral,  which  covers  all signals, is a function of dilution only, the quotient normalization assumes that the intensity of a majority of signals is a function of dilution  only.  Therefore,  a  most  probable  quotient  between  the signals of the corresponding spectrum and of a reference spectrum is  calculated  as  normalization  factor,  which  replaces  the  total integral   as   marker   of   the   sample   concentration" (Anal. Chem. 2006, 78, 13, 4281–4290). The assumption that allows for quotient normalization to work is that the true mean ratio is actually 1 and thus the same degree of up- and down-regulation is expected. The procedure for quotient normalization is shown below, as well as the code to create the normalized data.
+
+**Steps for Quotient Normalization**:
+
+* Calculate the median sample
+* For Each Sample: 
+  + Calculate the quotient of every metabolite concentration levle with respect to the median sample 
+  + Determine the median metabolite quotient (*MMQ*)
+  + Divide the concentration of all metabolites in the sample by the *MMQ*
+
+```{r}
+median_sample <- apply(data_env$dat, 2, median)
+normalized_dat <- data_env$dat 
+
+for (i in 1:nrow(normalized_dat)) {
+  quotient <- data_env$dat[i,] / median_sample
+  median_quotient <- median(quotient)
+  normalized_dat[i,] = data_env$dat[i,] / median_quotient
+}
+```
+
+Next, we apply quotient normalization to the data. We plot the original data before quotient normalization and the normalized data after its application. The results show the previous up-regulated samples now inline with the other samples. Therefore, we have accounted for the batch effect seen previously and can now continue with statistical analyses of the data.
+
+```{r, fig.height=6}
+library(tidyverse)
+library(patchwork)
+
+df_before <- 
+  data_env %>% 
+  .$dat %>%
+  .[1:100, ] %>% 
+  log() %>% 
+  as.data.frame() %>% 
+  mutate(sample_num = row_number()) %>% 
+  pivot_longer(-c(sample_num), 
+               names_to='metabolite', values_to="concentration")
+p1 <- 
+  df_before %>% 
+  ggplot() + 
+        geom_boxplot(aes(x=sample_num, 
+                         y=concentration, 
+                         group=sample_num))
+
+df_after <- 
+  normalized_dat %>%
+  .[1:100, ] %>% 
+  log() %>% 
+  as.data.frame() %>% 
+  mutate(sample_num = row_number()) %>% 
+  pivot_longer(-c(sample_num), 
+               names_to='metabolite', values_to="concentration")
+
+p2 <- 
+  df_after %>% 
+  ggplot() + 
+        geom_boxplot(aes(x=sample_num, 
+                         y=concentration, 
+                         group=sample_num))
+
+p1 / p2
+```
+
+## **Phenotype association**
+
+### **Male vs Female **
+
+**Analyze the metabolite differences between males 
+and females, e.g. using t-tests.**
+
+First, we ask R for information about the t-test function. This code tells us the parameters and specifications about how to run a t-test in R.
+
+```{r}
+?t.test
+```
+
+For each METABOLITE, we will be performing a t-test
+between the expression profiles of the different genders male and female classified in the gender variable. 
+
+We will be performing these tests on the **normalized**, 
+and **logged** data. Below we take the logarithm of the normalized data.
+
+```{r}
+log_norm_dat <- log(normalized_dat)
+```
+
+Now we can perform a `t.test` for each metabolite. The code below iterates over all metabolites and we group data values based on if they come from males or females. Using this grouped information, it is possible to run a two sample independent t-test for all metabolites. This test is justified because we have shown the data to be normally distributed and it is true that each sample is independent of all others in the study. We plot the distribution of p-values resulting from the tests for each sample below. We find that a majority initially are very small. However, this is before accounting for the multiple testing correction, discussed below.
+
+```{r}
+metabolites <- colnames(log_norm_dat)
+p_vals <- vector('double', length(metabolites))
+names(p_vals) <- metabolites
+for (metabolite in metabolites) {
+  male   <- log_norm_dat[data_env$gender==1, metabolite]
+  female <- log_norm_dat[data_env$gender==2, metabolite]
+  p_vals[metabolite] <- t.test(male, female)$p.value
+}
+```
+
+```{r}
+hist(p_vals, 
+     main='P-values for Metabolites by Gender', 
+     xlab='P values')
+```
+
+**Plot p-values as a distribution (use plot of your choice). What do you observe? Perform multiple testing correction with a method and α of your choice. **
+
+When multiple statistical tests are run, the occurrence of false positives for each test is equal to the significance level set prior to the statistical analysis. We set our significance level to 0.01 for our tests. However, when performing n tests, we need to account for the probability of receiving false positives for all n tests, not just one. Therefore, we apply the Bonferroni correction which divides the significance level by the number of tests, resulting in an adjusted significance level. Below we use the p.adjust() function in R to set this Bonferroni correction. We output histograms of the original p-values from the statistical tests without the Bonferroni correction and the p-values after the Bonferroni correction. We see that there are now much fewer small p-values than without the correction. 
+
+```{r}
+?p.adjust
+```
+
+```{r}
+adj_p_vals <- p.adjust(p_vals, 'bonferroni')
+
+par(mfrow = c(1, 2))
+
+hist(p_vals, 
+     main='Original P-values', 
+     xlab='P values')
+
+adj_p_vals <- p.adjust(p_vals, 'bonferroni')
+hist(adj_p_vals, 
+     main='Bonferroni corrected P-values', 
+     xlab='P values')
+```
+
+
+**How many metabolites are significantly associated with gender before and after multiple testing correction?**
+
+Below we show the number of significant p-values, i.e. those less than 0.01, before and after the Bonferroni correction. We see that there are X significant metabolites before and X significant metabolites after. The results are that the Bonferroni correction keeps unwanted false positives from being concluded as significant.
+
+```{r}
+before <- length(which(p_vals < 0.05))
+after <- length(which(adj_p_vals < 0.05))
+bp <- barplot(c(before, after), 
+        main = "Significant Metabolites by Sex", 
+        ylab = "# Significant Metabolites", 
+        names.arg = c('Before correction', 'After correction'), 
+        col = c("#f45044", "#4496f4"))
+
+text(bp, c(before,after)/2, labels = c(before,after), font = 2)
+```
+
+
+**Which 10 metabolites are most significantly associated with gender? Which pathways do these metabolites belong to?**
+
+Below we show the top 10 metabolites associated with gender by finding the metabolites with the smallest p-values after the Bonferroni correction. We have tabulated these metabolites, as well as their super pathway, sub pathway, and label.
+
+```{r}
+library(knitr)
+top_ten <- names(sort(adj_p_vals)[1:10])
+
+data_env$annotations %>% 
+  as.data.frame() %>% 
+  filter(name %in% top_ten) %>% 
+  kable()
+
+```
+
+**Visualize the differences between male and female for the top hit.**
+
+Below we create boxplots showing the data for the top hit, metabolite M32672, which is has the most significant association with gender. We reveal that the mean concentration of the metabolite in males is much greater than that of females.
+
+```{r}
+top_hit <- names(sort(adj_p_vals)[1])
+
+male <- log_norm_dat[data_env$gender==1, top_hit]
+female <- log_norm_dat[data_env$gender==2, top_hit]
+
+male <- c(male, rep(NA, length(female) - length(male)))
+
+df <- 
+  data.frame(Male=male, 
+             Female=female) %>%
+  mutate(index = row_number()) %>% 
+  pivot_longer(-c(index), 
+               names_to='sex', values_to="concentration") %>% 
+  mutate(sex = factor(sex, levels = c('Male', 'Female')))
+  
+
+
+df %>% 
+  ggplot() + 
+  geom_boxplot(aes(x=sex, 
+                   y=concentration, 
+                   fill=sex),
+               ) + 
+  theme(legend.position = "none") + 
+  labs(title=paste('Male vs Female Concentration of', top_hit)) + 
+  xlab("") + 
+  ylab("Normalized Concentration")
+  
+```
+
+
+## **Gaussian Graphical Model (GGM)**
+
+### **Partial Correlations and P-Values**
+
+**Calculate partial correlations and their p-values for your data. You can use the ppcor package.**
+
+Below we show that we can use the R package ppcor to create a Gaussian Graphical Model. First, we use the function pcor to calculate the partial correlations and their p-values. We output the names attribute of the logged, normalized data below.
+
+```{r}
+pcor <- ppcor::pcor(log_norm_dat)
+names(pcor)
+```
+
+
+### Bonferroni Correction
+
+**Perform multiple testing correction with Bonferroni correction. When calculating the number of tests, remember that a correlation matrix is symmetric and the diagonal does not count (calculate how many values there are in a correlation matrix). Set all insignificant values and the diagnoal in the partial correlation matrix to zero.**
+
+To perform multiple testing correction using the Bonferroni method, we can not use the built in R function since we have a matrix. Therefore, we need to calculate the total number of tests we will run so that we can divide the significance level. Below we show the calculation of the number of tests to be the number of columns in the matrix, denoted n, multiplied by (n-1) and divided by 2. Now that we have calculated the number of tests, we can show the histogram of the significant values using a significance level of XX. 
+
+```{r}
+n <- ncol(log_norm_dat)
+n_tests = (n*(n-1))/2 
+p_vals <- pcor$p.value
+adj_p_vals <- p_vals * n_tests
+adj_p_vals[adj_p_vals > 1] = 1
+hist(adj_p_vals[adj_p_vals < 0.05], 
+     main='Histogram of Bonferroni corrected P-values', xlab = 'Bonferroni corrected p-values')
+```
+
+Below we set the insignificant values and the diagonal values to 0 in order to visualize the GGM.
+
+```{r}
+adj_mat <- pcor$estimate
+adj_mat[adj_p_vals > 0.05] = 0
+
+for (i in 1:nrow(adj_mat)) {
+  adj_mat[i, i] = 0
+}
+```
+
+
+### **Visualizing the GGM** 
+
+**This matrix is the adjacency matrix of the underlying Gaussian graphical model. Visualize the network using the igraph package (tip: graph.adjacency function).**
+
+Below we use the igraph library and produce the final GGM network. 
+
+```{r}
+library(igraph)
+graph <- graph.adjacency(adj_mat)
+plot(graph)
+```
+

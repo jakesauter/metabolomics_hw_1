@@ -1,0 +1,13 @@
+{
+    "dialog-state": {
+        "query": "fig.height",
+        "path": "~/Documents/Weill_Cornell/Functional_Interpretation/metabolomics/homework_1",
+        "regex": false,
+        "caseSensitive": false,
+        "filePatterns": [],
+        "excludeFilePatterns": [],
+        "resultsCount": 3,
+        "errorCount": 0,
+        "replaceErrors": ""
+    }
+}
