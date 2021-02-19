@@ -1,0 +1,133 @@
+---
+title: "Assignment 1"
+author: "Mildred Unti & Caroline Broderick"
+date: "2/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data preprocessing 
+
+```{r data visualization}
+load("/home/x1/Documents/Weill_Cornell/Functional_Interpretation/metabolomics/homework_1/data/Simulated_metabolomics_data.RData")
+boxplot(dat, use.cols = FALSE) 
+
+```
+
+Data needs to be logged before graphing 
+```{r logged data visualization}
+library(tidyverse)
+library(ggplot2)
+library(rlang)
+dat_log <- log(dat)
+boxplot(dat_log, use.cols = FALSE)
+```
+
+Logged data is easier to visualize. Data needs to be normalized; there are clearly outliers from increased input. 
+
+```{r data normalization}
+dat_norm <- matrix(nrow = nrow(dat) , ncol = ncol(dat)) #makes a matrix that matches dat where normalized metabolite levels will be placed. 
+colnames(dat_norm) <- colnames(dat)
+rownames(dat_norm) <- rownames(dat)
+dat_matrix <- as.matrix(dat) #makes a matrix that resembles dat 
+for (a in 1:nrow(dat_matrix)) 
+  {
+ 		dat_norm[a, ] <- as.numeric(dat_matrix[a, ] / median(as.numeric(dat_matrix[a, ])))
+ 	 } #divides each row by the median of the entire row (sample) and assigns it into the matrix of normalized values
+dat_norm_d <- as.data.frame(dat_norm)
+log_dat_norm_d <- log(dat_norm_d)
+
+```
+
+Normalized metabolite levels 
+```{r}
+boxplot(log(dat_norm), use.cols = FALSE)
+```
+There are no longer outliers. 
+
+##Phenotype Association
+To analyze metabolite differences between males and females, we will perform a t-test on each metabolite using gender, then plot the distribution of p-values 
+```{r}
+dat1 <- dat_norm_d #using non-logged normalized data
+metabolite_p_values <- data.frame(metabolite = character(), p_value = double())#initializes a data frame that contains the name of the metabolite and significance (p-value) of the difference of that metabolite between males and females.
+
+for (i in 1:ncol(dat1)){
+  m_name = colnames(dat1)[i] #m_name is a temporary storage vector for the metabolite name 
+  t_test = t.test(dat1[,m_name]~gender) #calculates differences of  levels of the metabolite at i 
+  results_temp <- data.frame(metabolite = m_name, p_value = t_test$p.value)#temporary storage of the metabolite name and p_value 
+  metabolite_p_values <- rbind(metabolite_p_values, results_temp)#adds each metabolite and p value to metabolite_pvalues 
+}
+ggplot(metabolite_p_values, aes(p_value))+geom_histogram()+scale_x_log10()
+
+
+```
+  
+```{r}
+a = .05 
+a_bonferroni = a/ncol(dat1)
+```
+The number of metabolites with significant differences before correction are shown below: 
+```{r}
+sum(metabolite_p_values$p_value < a)
+```
+The number of metabolites with significant differences after correction are shown below:
+```{r}
+sum(metabolite_p_values$p_value < a_bonferroni)
+```
+The 10 metabolites with the most significant difference between men and women are shown below. 
+```{r}
+library(dplyr) #loading this library for merge function
+metabolite_p_values$name <- metabolite_p_values$metabolite
+metabolite_p_values_annotation <- merge(metabolite_p_values, annotations)
+ordered_metabolite_p_values<-metabolite_p_values_annotation[order(metabolite_p_values_annotation$p_value),]
+head(ordered_metabolite_p_values, 10)
+```
+M32418 metabolite levels are the most significant different between men and women betwe. 
+```{r}
+boxplot(log(dat1[,"M32418"])~gender)
+```
+
+
+##Gaussian Graphical Model
+```{r}
+library(ppcor)
+pcor_results <- pcor(dat1) #pearson 
+```
+Multiple testing Bonferroni correction. All correlations that are not significant after Bonferroni testing are set to 0. All correlations that are between the same metabolite are also set to 0. 
+```{r}
+num_metabolites <-ncol(dat1)
+num_correlations <- ((num_metabolites**2) - num_metabolites)/2
+a = .05
+a_bf = a/num_correlations
+pcor_results_significant <- pcor_results$estimate
+for(i in 1:nrow(pcor_results_significant)){
+  for( j in 1:ncol(pcor_results_significant)){
+    if(pcor_results$p.value[i,j] > a_bf){
+      pcor_results_significant[i,j] = 0 #sets all non-significant correlations to 0
+    }
+    if(i == j) 
+    {
+       pcor_results_significant[i,j] = 0 #sets all correlations between the same metabolite to 0
+    }
+  }
+  
+  
+}
+```
+igraph can be used to visualize all significant metabolite correlations
+```{r}
+
+
+library(igraph)
+```
+```{r}
+
+metabolite_interactions<-graph_from_adjacency_matrix(pcor_results_significant*6, mode = "max" )
+graph_metabolite_interactions <- plot(metabolite_interactions, vertex.size = 7, vertex.label.cex = 0.2, vertex.label.family="Times",  vertex.label.color = "black", vertex.frame.color = "white", vertex.color = "lightblue" ) 
+
+
+```
+

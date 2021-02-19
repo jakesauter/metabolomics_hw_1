@@ -1,0 +1,109 @@
+---
+title: "HW 1"
+output: html_notebook
+---
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(reshape2)
+dat.tbl = data.table(dat)
+dat.tbl$samp = 1:nrow(dat.tbl)
+dat.tbl$samp = as.factor(dat.tbl$samp)
+dat.tbl = melt(dat.tbl, id.vars = "samp")
+dat.tbl$transvalue = log(dat.tbl$value)
+p = ggplot(dat.tbl, aes(x=samp,y=transvalue)) + geom_boxplot() + xlab("Sample") + ylab("Log-transformed Value")
+p
+```
+
+The boxplot shows that there are some clear outliers with respect to value distribution, appearing near the 50-70 sample mark in the dataset. These samples have a greatly elevated distribution of log-transformed values relative to other samples. This is best explained by these samples having a larger number of input cells into the metabolomics pipeline, although it could also be that these samples are metabolically more active and simply have more metabolites for the same number of input cells.
+
+```{r}
+meds = dat.tbl[,2:3][,median(unlist(.SD)), by = variable]
+dat.tbl = merge(dat.tbl, meds, by = "variable")
+setnames(dat.tbl, "V1", "median_value")
+dat.tbl[, ratio := value/median_value]
+dil_med = dat.tbl[,c(2,6)][,median(unlist(.SD)), by = samp]
+dat.tbl = merge(dat.tbl, dil_med, by = "samp")
+setnames(dat.tbl, "V1", "dilution_ratio")
+dat.tbl[, norm_value := value/dilution_ratio]
+#Take the log-transformation of the values and plot as a boxplot to see if the normalization looks good!
+dat.tbl[, norm_value_trans := log(norm_value)]
+p2 = ggplot(dat.tbl, aes(x=samp,y=norm_value_trans)) + geom_boxplot() + xlab("Sample") + ylab("Log-transformed Value")
+p2
+```
+
+As is readily seen in the new boxplot, quotient normalizing the data correctly brings all samples back to the same median log-transformed value.
+
+```{r}
+gender = data.table(gender)
+gender$samp = 1:nrow(gender)
+gender$samp = as.factor(gender$samp)
+dat.tbl = merge(dat.tbl, gender, by = "samp")
+ttests = dat.tbl[, t.test(unlist(.SD[gender == 1,norm_value]),unlist(.SD[gender == 2,norm_value])), by = variable]
+ttests = ttests[seq(1,669,2),] #de-duplicating t-test results
+```
+
+```{r}
+p3 = ggplot(ttests, aes(x = p.value)) + geom_density() + xlab("Raw p value")
+p3
+```
+
+```{r}
+ttests[p.value < 0.05, .N] #how many p-values are significant for an alpha of 0.05?
+```
+This returns 202 significantly different metabolites across gender.
+
+```{r}
+adj_pvals = data.table(p.adjust(ttests$p.value, method = "BH"))
+p4 = ggplot(adj_pvals, aes(x = V1)) + geom_density() + xlab("Adjusted p value")
+p4
+```
+
+```{r}
+adj_pvals[V1 < 0.05, .N] #how many p-values are significant for an alpha of 0.05?
+```
+This returns 186 significantly different metabolites across gender.
+
+```{r}
+ttests$adj_pval = adj_pvals
+topten = ttests[order(adj_pval)][1:10]$variable
+topten = data.table(topten)
+setnames(topten, "topten","name")
+topten = merge(topten, annotations, by = "name", all.x = TRUE)
+topten[, .N, by = .(Super_pathway, Sub_pathway)]
+```
+
+```{r}
+tophit = ttests[order(adj_pval)][1]$variable
+dat.tbl.tophit = dat.tbl[variable == tophit]
+dat.tbl.tophit$gender = as.factor(dat.tbl.tophit$gender)
+p4 = ggplot(data = dat.tbl.tophit, aes(x=gender, y=norm_value_trans)) + geom_boxplot()
+p4
+```
+Hence this top hit (M32418) is more highly expressed in females (gender = 2) than in males (gender = 1).
+
+```{r}
+install.packages("ppcor")
+install.packages("igraph")
+library(ppcor)
+library(igraph)
+
+result = pcor(dat)
+alpha = 0.05/(335*334)
+pvals = result$p.value
+
+for (i in 1:nrow(pvals)){
+  for (j in 1:ncol(pvals)){
+    if(pvals[i,j] > alpha){
+      pvals[i,j] = 0
+    }
+    if(i==j){
+      pvals[i,j] = 0
+    }
+  }
+}
+
+g = graph.adjacency(pvals, weighted = TRUE)
+plot(g, vertex.label = NA, vertex.size = 3, edge.arrow.size = 0.4)
+```
