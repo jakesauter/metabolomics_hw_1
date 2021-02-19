@@ -5,10 +5,11 @@ date: "2/19/2021"
 output: 
   html_document: 
     toc: true
+    keep_md: true
 editor_options: 
   chunk_output_type: console
 ---
-
+https://raw.githubusercontent.com/jakesauter/metabolomics_hw_1/main/imgs/graph.png
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, 
                       warning = FALSE, 
@@ -460,7 +461,7 @@ plot(graph,
 dev.off()
 ```
 
-![](/home/x1/Documents/Weill_Cornell/Functional_Interpretation/metabolomics/homework_1/imgs/graph.png)
+![](https://raw.githubusercontent.com/jakesauter/metabolomics_hw_1/main/imgs/graph.png)
 
 
 **Brief pathway analysis of high degree vertices**
