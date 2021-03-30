@@ -1,14 +1,11 @@
----
-title: "Introduction to Metabolomics"
-author: "Jake Sauter and Nick Bartelo"
-date: "2/19/2021"
-output: 
-  html_document: 
-    toc: true
-    keep_md: true
-editor_options: 
-  chunk_output_type: console
----
+# **Introduction to Metabolomics**
+
+
+A report by **Jake Sauter** and **Nick Bartelo**
+
+date: 2/19/2021
+
+
 https://raw.githubusercontent.com/jakesauter/metabolomics_hw_1/main/imgs/graph.png
 
 
